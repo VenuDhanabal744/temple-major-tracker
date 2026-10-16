@@ -1,0 +1,32 @@
+{
+  "years": {
+    "2026-2027": {
+      "count": 360,
+      "majors": 245,
+      "minors": 115,
+      "source": "live",
+      "scrapedAt": "2026-10-15"
+    },
+    "2025-2026": {
+      "count": 360,
+      "majors": 241,
+      "minors": 119,
+      "source": "wayback+pdf",
+      "scrapedAt": "2026-10-15"
+    },
+    "2024-2025": {
+      "count": 351,
+      "majors": 246,
+      "minors": 105,
+      "source": "live",
+      "scrapedAt": "2026-10-15"
+    },
+    "2023-2024": {
+      "count": 349,
+      "majors": 245,
+      "minors": 104,
+      "source": "live",
+      "scrapedAt": "2026-10-15"
+    }
+  }
+}
