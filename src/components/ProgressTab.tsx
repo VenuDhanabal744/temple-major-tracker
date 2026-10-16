@@ -1,6 +1,7 @@
 import type { GenEd, PlanEntry, Program } from '../types'
 import type { AppState } from '../lib/store'
-import type { AuditResult } from '../lib/audit'
+import { counts, type AuditResult } from '../lib/audit'
+import type { CollegeResolved } from '../lib/college'
 import type { GenEdAudit as GenEdAuditResult } from '../lib/gened'
 import { GenEdAudit } from './GenEdAudit'
 import { ProgramAudit } from './ProgramAudit'
@@ -13,6 +14,7 @@ type Props = {
   state: AppState
   update: (fn: (s: AppState) => AppState) => void
   resolved: Resolved[]
+  collegeResolved: CollegeResolved[]
   gened: GenEd | null
   genedAudit: GenEdAuditResult | null
   defaultYear: string
@@ -21,7 +23,7 @@ type Props = {
   goTo: (tab: string) => void
 }
 
-export function ProgressTab({ state, update, resolved, gened, genedAudit, defaultYear, years, programsForYear, goTo }: Props) {
+export function ProgressTab({ state, update, resolved, collegeResolved, gened, genedAudit, defaultYear, years, programsForYear, goTo }: Props) {
   const setEntry = (i: number, patch: Partial<PlanEntry>) =>
     update((s) => ({ ...s, plan: s.plan.map((e, j) => (j === i ? { ...e, ...patch } : e)) }))
   const remove = (i: number) => update((s) => ({ ...s, plan: s.plan.filter((_, j) => j !== i) }))
@@ -31,6 +33,8 @@ export function ProgressTab({ state, update, resolved, gened, genedAudit, defaul
       const k = `${year}/${pid}`
       return { ...s, manual: { ...s.manual, [k]: { ...(s.manual[k] ?? {}), [key]: codes } } }
     })
+
+  const degree = degreeCredits(state, resolved, collegeResolved, genedAudit)
 
   const role = (r: Resolved) => (r.index === 0 ? 'Primary major' : r.program?.degree === 'Minor' ? 'Minor' : 'Second major')
   const allUsedBefore = (i: number) => {
@@ -100,6 +104,21 @@ export function ProgressTab({ state, update, resolved, gened, genedAudit, defaul
           </div>
         )}
 
+        {collegeResolved.map((c) => (
+          <ProgramAudit
+            key={`${c.year}/${c.program.id}`}
+            unit="college"
+            program={c.program}
+            result={c.result}
+            courses={state.courses}
+            concentration={null}
+            onConcentration={() => {}}
+            manual={state.manual[`${c.year}/${c.program.id}`] ?? {}}
+            onManual={(k, codes) => setManual(c.year, c.program.id, k, codes)}
+            header={<span className="pill accent">College requirement</span>}
+          />
+        ))}
+
         {gened && genedAudit && (
           <GenEdAudit
             gened={gened}
@@ -127,6 +146,15 @@ export function ProgressTab({ state, update, resolved, gened, genedAudit, defaul
               <ProgressBar total={r.result!.required} completed={r.result!.completed} inProgress={r.result!.inProgress} planned={r.result!.planned} thin />
             </div>
           ))}
+          {collegeResolved.map((c) => (
+            <div key={`${c.year}/${c.program.id}`} style={{ marginTop: 10 }}>
+              <div className="row small" style={{ justifyContent: 'space-between' }}>
+                <span>{c.program.name}</span>
+                <span className="muted">{fmt(c.result.completed)}/{fmt(c.result.required)} cr</span>
+              </div>
+              <ProgressBar total={c.result.required} completed={c.result.completed} inProgress={c.result.inProgress} planned={c.result.planned} thin />
+            </div>
+          ))}
           {!resolved.length && <p className="muted small">Pick a major to see progress.</p>}
           {genedAudit && (
             <div style={{ marginTop: 10 }}>
@@ -137,6 +165,7 @@ export function ProgressTab({ state, update, resolved, gened, genedAudit, defaul
               <ProgressBar total={genedAudit.result.required} completed={genedAudit.result.completed} inProgress={genedAudit.result.inProgress} planned={genedAudit.result.planned} thin />
             </div>
           )}
+          {degree && <DegreeBreakdown {...degree} />}
           <div style={{ marginTop: 12 }}><Legend /></div>
           <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '14px 0' }} />
           <label className="field">
@@ -153,6 +182,103 @@ export function ProgressTab({ state, update, resolved, gened, genedAudit, defaul
         </div>
         {state.prelaw.enabled && <PreLawSummary courses={state.courses} prelaw={state.prelaw} gradYear={state.gradYear} onOpen={() => goTo('prelaw')} />}
       </div>
+    </div>
+  )
+}
+
+type Degree = {
+  label: string
+  total: number
+  parts: { label: string; credits: number }[]
+  shared: number
+  electives: number
+  completed: number
+  inProgress: number
+  planned: number
+  bulletin: CollegeResolved['degree']['summary']
+}
+
+/** How the primary major's degree total splits into GenEd, college, program and free-elective credits. */
+function degreeCredits(state: AppState, resolved: Resolved[], colleges: CollegeResolved[], gened: GenEdAuditResult | null): Degree | null {
+  const primary = resolved[0]?.program
+  if (!primary) return null
+  const college = colleges.find((c) => c.year === resolved[0].year && c.program.collegeSlug === primary.collegeSlug)
+  const total = primary.degreeCredits ?? college?.degree.credits ?? null
+  if (!total) return null
+  // engineering and Boyer majors list the whole degree on their page, GenEd slots included
+  const genedInMajor = listsGenEd(primary)
+  const parts = [
+    ...(gened && !genedInMajor ? [{ label: 'GenEd (after waivers)', credits: gened.result.required }] : []),
+    ...colleges.map((c) => ({ label: c.program.name, credits: c.result.required })),
+    {
+      label: `${resolved.length > 1 ? 'Majors and minors' : 'Major'}${genedInMajor ? ' (its page includes GenEd)' : ''}`,
+      credits: resolved.reduce((s, r) => s + (r.result?.required ?? 0), 0),
+    },
+  ]
+  // credits earned toward the degree: each passed course once, whatever it counts for
+  const best = new Map<string, AppState['courses'][number]>()
+  for (const c of state.courses) if (counts(c, 'D-') && !best.has(c.code)) best.set(c.code, c)
+  // a course used by GenEd, the college and a major at once (STAT 2103) is only taken once
+  const buckets = [genedInMajor ? undefined : gened?.result.used, ...colleges.map((c) => c.result.used), ...resolved.map((r) => r.used)].filter((b) => b !== undefined)
+  let shared = 0
+  for (const [code, c] of best) {
+    const n = buckets.filter((b) => b.has(code)).length
+    if (n > 1) shared += (c.credits || 3) * (n - 1)
+  }
+  const sum = (st: string) => [...best.values()].filter((c) => c.status === st).reduce((s, c) => s + (c.credits || 0), 0)
+  return {
+    label: `${primary.degree} degree`,
+    total,
+    parts,
+    shared,
+    electives: Math.max(0, total - parts.reduce((s, p) => s + p.credits, 0) + shared),
+    completed: sum('completed'),
+    inProgress: sum('in-progress'),
+    planned: sum('planned'),
+    bulletin: college?.degree.summary ?? [],
+  }
+}
+
+function listsGenEd(p: Program): boolean {
+  return p.blocks.some(
+    (b) =>
+      b.role !== 'info' &&
+      b.sections.some((s) =>
+        s.items.some((it) =>
+          it.type === 'rule' || it.type === 'choose'
+            ? /\bGen ?Ed\b|General Education/i.test(it.text)
+            : it.type === 'course' && it.options.some((o) => o.codes.some((c) => / 0[89]\d\d$/.test(c))),
+        ),
+      ),
+  )
+}
+
+function DegreeBreakdown({ label, total, parts, shared, electives, completed, inProgress, planned, bulletin }: Degree) {
+  return (
+    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+      <div className="row small" style={{ justifyContent: 'space-between' }}>
+        <b>{label}</b>
+        <span className="muted">{fmt(completed)}/{fmt(total)} cr earned</span>
+      </div>
+      <ProgressBar total={total} completed={completed} inProgress={inProgress} planned={planned} thin />
+      <table className="small muted" style={{ width: '100%', marginTop: 6, borderCollapse: 'collapse' }}>
+        <tbody>
+          {parts.map((p) => (
+            <tr key={p.label}><td>{p.label}</td><td style={{ textAlign: 'right', whiteSpace: 'nowrap', paddingLeft: 8, verticalAlign: 'top' }}>{fmt(p.credits)}</td></tr>
+          ))}
+          {shared > 0 && <tr><td>Courses counted twice</td><td style={{ textAlign: 'right', whiteSpace: 'nowrap', paddingLeft: 8, verticalAlign: 'top' }}>−{fmt(shared)}</td></tr>}
+          <tr><td>Free electives</td><td style={{ textAlign: 'right', whiteSpace: 'nowrap', paddingLeft: 8, verticalAlign: 'top' }}>{fmt(electives)}</td></tr>
+          <tr style={{ borderTop: '1px solid var(--border)' }}><td><b>Degree total</b></td><td style={{ textAlign: 'right', whiteSpace: 'nowrap', paddingLeft: 8, verticalAlign: 'top' }}><b>{fmt(total)}</b></td></tr>
+        </tbody>
+      </table>
+      <p className="muted small" style={{ margin: '6px 0 0' }}>
+        Earned counts every course you passed once, including electives. Courses that meet two requirements at once free up room for electives.
+      </p>
+      {bulletin.length > 0 && (
+        <p className="muted small" style={{ margin: '6px 0 0' }}>
+          The college's own summary: {bulletin.map((b) => `${b.text} ${fmt(b.credits?.min ?? 0)}`).join(' · ')}.
+        </p>
+      )}
     </div>
   )
 }

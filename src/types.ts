@@ -56,6 +56,19 @@ export type Program = {
 
 export type YearData = { year: string; programs: Program[] }
 
+// College-wide degree requirements listed once on a college's page (see scripts/scrape_college.py)
+export type CollegeDegree = { credits: number | null; blocks: Block[]; summary: { text: string; credits: Hours }[] }
+
+export type CollegeReqs = {
+  name: string
+  url: string
+  source: string
+  sourceKind: Program['sourceKind']
+  degrees: Record<string, CollegeDegree> // keyed by Program.degree, e.g. BBA
+}
+
+export type CollegeYear = { year: string; colleges: Record<string, CollegeReqs> }
+
 // General Education requirements for one catalog year (see scripts/scrape_gened.py)
 export type GenEdArea = {
   code: string // GW, GQ, GY, GZ, GA, GB, GD, GG, GS, GU

@@ -3,6 +3,7 @@ import { audit } from './lib/audit'
 import { GRAD_YEARS, courseTitles, defaultCatalogYear, useIndex, useYears } from './lib/catalog'
 import { useAppState } from './lib/store'
 import { auditGenEd, majorWaivers, useGenEd } from './lib/gened'
+import { collegeProgram, useColleges, type CollegeResolved } from './lib/college'
 import { CoursesTab } from './components/CoursesTab'
 import { ProgressTab, type Resolved } from './components/ProgressTab'
 import { CompareTab } from './components/CompareTab'
@@ -21,6 +22,7 @@ export default function App() {
   const loaded = !!data[defaultYear]
 
   const gened = useGenEd(defaultYear)
+  const colleges = useColleges(neededYears)
 
   const programsForYear = (y: string) => [...(data[y]?.values() ?? [])]
   const titles = useMemo(
@@ -49,6 +51,19 @@ export default function App() {
     })
     return out
   }, [state.plan, state.courses, state.minGrade, state.manual, state.allowDoubleCount, data, defaultYear])
+
+  // college-wide requirements (e.g. the Fox BBA foundation) for each major, once per college and degree
+  const collegeResolved: CollegeResolved[] = useMemo(() => {
+    const out: CollegeResolved[] = []
+    for (const r of resolved) {
+      if (!r.program || r.program.degree === 'Minor') continue
+      const c = collegeProgram(colleges[r.year], r.program)
+      if (!c || out.some((o) => o.year === r.year && o.program.id === c.program.id)) continue
+      const result = audit(c.program, state.courses, { concentration: null, minGrade: state.minGrade, manual: state.manual[`${r.year}/${c.program.id}`] })
+      out.push({ year: r.year, program: c.program, degree: c.degree, result })
+    }
+    return out
+  }, [resolved, colleges, state.courses, state.minGrade, state.manual])
 
   // GenEd follows the bulletin of the year the student entered, i.e. the class default
   const genedAudit = useMemo(() => {
@@ -96,7 +111,7 @@ export default function App() {
       ) : (
         <>
           {tab === 'progress' && (
-            <ProgressTab state={state} update={update} resolved={resolved} gened={gened} genedAudit={genedAudit} defaultYear={defaultYear} years={years} programsForYear={programsForYear} goTo={(t) => setTab(t as Tab)} />
+            <ProgressTab state={state} update={update} resolved={resolved} collegeResolved={collegeResolved} gened={gened} genedAudit={genedAudit} defaultYear={defaultYear} years={years} programsForYear={programsForYear} goTo={(t) => setTab(t as Tab)} />
           )}
           {tab === 'courses' && <CoursesTab courses={state.courses} titles={titles} onChange={(courses) => update((s) => ({ ...s, courses }))} />}
           {tab === 'compare' && (

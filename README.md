@@ -18,6 +18,10 @@ A degree-progress tracker for Temple University undergraduates. It uses requirem
   BIOL 1111 + BIOL 1112 for both GS courses, Boyer/Tyler/Theater sequences for GA, and so on), as do
   waivers your major grants (CST majors waive 2 GS + 1 GQ; TUteach majors also waive GB). Other
   waivers, such as study abroad for GG, can be ticked by hand.
+- **College requirements and degree total**: requirements a college lists once for every major (the
+  Fox School's BBA lower- and upper-division foundation, 61 credits) get their own card. The Summary
+  breaks the degree total (e.g. 124 for a BBA) into GenEd, college, major and free-elective credits,
+  next to the credits you've earned.
 - **Double major finder**: ranks every major or minor by overlap with your primary major (credits
   covered by your major's required courses, plus credits coverable with electives that count for both)
   and by the credits left given your own courses. It also lists shared courses and states Temple's
@@ -71,6 +75,11 @@ scripts/.venv/bin/python scripts/fill_from_pdf.py 2025-2026
 scripts/.venv/bin/python scripts/scrape_gened.py
 ```
 
+```bash
+scripts/.venv/bin/python scripts/scrape_college.py
+```
+
+`scrape_college.py` writes `public/data/college/<year>.json` from each college page's requirements tab.
 `scrape_gened.py` writes `public/data/gened/<year>.json`. For 2025-2026 each area's course list comes
 from an Internet Archive snapshot only when its courses match the official PDF; otherwise the PDF list
 is used (flagged per area in the app).
@@ -82,7 +91,7 @@ in `src/lib/catalog.ts`.
 ## Limits
 
 This is a planning aid, not an official degree audit; always confirm with DARS and your advisor.
-College-wide requirements (credit totals, upper-level credits, language) are shown as notes from the
-bulletin, not tracked. GenEd does not model the 45+ transfer curriculum, and GS List I / List II
+Degree totals come from each major's page or its academic plan. College rules that aren't course
+tables (upper-level credit minimums, CLA's language requirement) are shown as notes, not tracked. GenEd does not model the 45+ transfer curriculum, and GS List I / List II
 substitutions need a manual assignment. Free-text elective rules without a subject ("two lab
 science courses") need a manual assignment.

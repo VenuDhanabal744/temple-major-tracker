@@ -16,6 +16,7 @@ type Props = {
   highlight?: Set<string> // course codes to mark as shared with another program
   header?: React.ReactNode
   readOnly?: boolean
+  unit?: string // what the requirements belong to: "major" (default) or e.g. "college"
 }
 
 function markClass(r: ItemResult): string {
@@ -36,7 +37,7 @@ function itemLabel(r: ItemResult): { title: string; sub?: string } {
   return { title: it.text }
 }
 
-export function ProgramAudit({ program, result, courses, concentration, onConcentration, manual, onManual, usedElsewhere, highlight, header, readOnly }: Props) {
+export function ProgramAudit({ program, result, courses, concentration, onConcentration, manual, onManual, usedElsewhere, highlight, header, readOnly, unit = 'major' }: Props) {
   const [showAll, setShowAll] = useState(false)
   const conc = concentrationBlocks(program)
   const taken = new Set(courses.map((c) => c.code))
@@ -73,7 +74,7 @@ export function ProgramAudit({ program, result, courses, concentration, onConcen
       )}
 
       <div className="stats" style={{ marginTop: 14 }}>
-        <div className="stat"><b>{pct}%</b><span>of major credits completed</span></div>
+        <div className="stat"><b>{pct}%</b><span>of {unit} credits completed</span></div>
         <div className="stat"><b>{fmt(result.completed)}</b><span>credits completed</span></div>
         <div className="stat"><b>{fmt(result.inProgress + result.planned)}</b><span>in progress + planned</span></div>
         <div className="stat"><b>{fmt(remaining)}</b><span>credits still unplanned</span></div>
@@ -82,7 +83,7 @@ export function ProgramAudit({ program, result, courses, concentration, onConcen
       <div style={{ marginTop: 10 }}>
         <ProgressBar total={result.required} completed={result.completed} inProgress={result.inProgress} planned={result.planned} />
         <div className="muted small" style={{ marginTop: 4 }}>
-          Tracking {fmt(result.required)} credits of listed major requirements
+          Tracking {fmt(result.required)} credits of listed {unit} requirements
           {program.majorCredits ? ` (bulletin total: ${fmt(program.majorCredits.min)}${program.majorCredits.max !== program.majorCredits.min ? `–${fmt(program.majorCredits.max)}` : ''})` : ''}
           {program.degreeCredits ? ` · degree requires ${program.degreeCredits} total credits` : ''}.
         </div>

@@ -351,6 +351,11 @@ def parse_program(html, url):
 
     m = re.search(r"(?:minimum|total) of (\d{3}) (?:credits|semester hours)", clean(req.get_text(" ")), re.I)
     degree_credits = int(m.group(1)) if m else None
+    if degree_credits is None:
+        # every major's Academic Plan tab ends with the degree's "Total Credit Hours"
+        plan = s.select_one("#academicplantextcontainer")
+        plan_totals = [int(t) for t in re.findall(r"Total Credit Hours:?\s*(\d{3})", clean(plan.get_text(" ")))] if plan else []
+        degree_credits = max(plan_totals) if plan_totals else None
 
     # rules without explicit subjects inherit the subjects the program itself requires most
     subj_counts = {}
